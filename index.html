@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="VitaTrack">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#4a90a4">
-  <meta name="description" content="Track your meals, macros, and measurements">
+  <meta name="description" content="Track your meals and macros">
   <title>VitaTrack</title>
   
   <!-- PWA Manifest -->
@@ -298,6 +299,79 @@
       padding: 40px 20px;
       color: var(--text-light);
     }
+
+    /* Skip day toggle */
+    .skip-day-banner {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .skip-day-banner .skip-info {
+      flex: 1;
+    }
+    .skip-day-banner .skip-label {
+      font-weight: 500;
+      font-size: 15px;
+    }
+    .skip-day-banner .skip-sublabel {
+      font-size: 12px;
+      color: var(--text-light);
+      margin-top: 2px;
+    }
+    .toggle-track {
+      width: 48px;
+      height: 28px;
+      border-radius: 14px;
+      background: var(--border);
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .toggle-track.active {
+      background: var(--warning);
+    }
+    .toggle-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: white;
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .toggle-track.active .toggle-thumb {
+      transform: translateX(20px);
+    }
+    .skipped-today-notice {
+      background: var(--warning);
+      color: #5a4e1a;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      text-align: center;
+      font-weight: 500;
+      font-size: 15px;
+    }
+    .chart-bar-skipped {
+      background: repeating-linear-gradient(
+        -45deg,
+        var(--warning),
+        var(--warning) 3px,
+        #f0d97a 3px,
+        #f0d97a 6px
+      );
+      border-radius: 4px 4px 0 0;
+      opacity: 0.7;
+    }
     
     /* Inline form row */
     .form-row {
@@ -391,6 +465,8 @@
   <main>
     <!-- HOME PAGE -->
     <div id="home" class="page active">
+      <div id="skip-day-area"></div>
+
       <div class="stats">
         <div class="stat">
           <div class="stat-value" id="today-calories">0</div>
@@ -402,14 +478,7 @@
         </div>
       </div>
       
-      <div class="card">
-        <h2>Latest Measurement</h2>
-        <div id="latest-measurement">
-          <p class="empty">No measurements yet</p>
-        </div>
-      </div>
-      
-      <div class="card">
+      <div id="today-meals-card" class="card">
         <h2>Today's Meals</h2>
         <div id="today-meals">
           <p class="empty">No meals logged today</p>
@@ -450,28 +519,6 @@
       <div class="card">
         <h2>Summary</h2>
         <div id="trend-summary"></div>
-      </div>
-    </div>
-
-    <!-- MEASURE PAGE -->
-    <div id="measure" class="page">
-      <div class="card">
-        <h2>New Measurement</h2>
-        <label>Above Navel (cm)</label>
-        <input type="number" id="above-navel" inputmode="decimal" step="0.1" placeholder="e.g., 85.5">
-        
-        <label>Below Navel (cm)</label>
-        <input type="number" id="below-navel" inputmode="decimal" step="0.1" placeholder="e.g., 92.0">
-        
-        <label>Notes (optional)</label>
-        <input type="text" id="measure-notes" placeholder="Any notes...">
-        
-        <button class="btn btn-primary" onclick="saveMeasurement()">Save Measurement</button>
-      </div>
-      
-      <div class="card">
-        <h2>Recent Measurements</h2>
-        <div id="measurement-history"></div>
       </div>
     </div>
 
@@ -522,7 +569,6 @@
         <h2>Export Data</h2>
         <button class="btn btn-secondary" onclick="exportData('json')">Export as JSON</button>
         <button class="btn btn-secondary" onclick="exportData('csv')">Export Meals as CSV</button>
-        <button class="btn btn-secondary" onclick="exportData('measurements')">Export Measurements as CSV</button>
       </div>
       
       <div class="card">
@@ -545,10 +591,6 @@
     <button onclick="showPage('trends')">
       <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
       Trends
-    </button>
-    <button onclick="showPage('measure')">
-      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-      Measure
     </button>
     <button onclick="showPage('food')">
       <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
@@ -675,14 +717,67 @@
 
   <script>
     // ===== PWA SUPPORT =====
+    let deferredPrompt = null;
+
     // Register Service Worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('Service Worker registered:', reg.scope))
+          .then(reg => {
+            console.log('Service Worker registered:', reg.scope);
+            // Check for updates periodically
+            setInterval(() => reg.update(), 60 * 60 * 1000);
+          })
           .catch(err => console.log('Service Worker registration failed:', err));
       });
     }
+
+    // Capture install prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      showInstallBanner();
+    });
+
+    function showInstallBanner() {
+      const existing = document.getElementById('install-banner');
+      if (existing) return;
+
+      const banner = document.createElement('div');
+      banner.id = 'install-banner';
+      banner.innerHTML = `
+        <div style="position:fixed;bottom:70px;left:12px;right:12px;background:var(--primary);color:white;padding:14px 16px;border-radius:12px;display:flex;align-items:center;justify-content:space-between;z-index:150;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+          <div style="flex:1;">
+            <div style="font-weight:600;font-size:15px;">Install VitaTrack</div>
+            <div style="font-size:13px;opacity:0.9;">Add to home screen for quick access</div>
+          </div>
+          <button onclick="installPWA()" style="background:white;color:var(--primary);border:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;margin-left:12px;">Install</button>
+          <button onclick="dismissInstallBanner()" style="background:none;border:none;color:white;font-size:22px;cursor:pointer;padding:4px 8px;margin-left:4px;opacity:0.8;">&times;</button>
+        </div>
+      `;
+      document.body.appendChild(banner);
+    }
+
+    function installPWA() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((choice) => {
+        deferredPrompt = null;
+        dismissInstallBanner();
+      });
+    }
+
+    function dismissInstallBanner() {
+      const banner = document.getElementById('install-banner');
+      if (banner) banner.remove();
+    }
+
+    // Hide banner once installed
+    window.addEventListener('appinstalled', () => {
+      deferredPrompt = null;
+      dismissInstallBanner();
+      console.log('VitaTrack installed!');
+    });
 
     // ===== DATA STORAGE =====
     const DB = {
@@ -710,7 +805,6 @@
         ]);
       }
       if (!DB.get('meals')) DB.set('meals', []);
-      if (!DB.get('measurements')) DB.set('measurements', []);
     }
 
     // ===== NAVIGATION =====
@@ -726,7 +820,6 @@
       const titles = { 
         home: 'VitaTrack', 
         trends: 'Trends',
-        measure: 'Measurements', 
         food: 'Log Food', 
         ingredients: 'Ingredients', 
         data: 'Data' 
@@ -739,18 +832,74 @@
     function refreshPage() {
       if (currentPage === 'home') refreshHome();
       else if (currentPage === 'trends') refreshTrends();
-      else if (currentPage === 'measure') refreshMeasurements();
       else if (currentPage === 'food') refreshMeals();
       else if (currentPage === 'ingredients') refreshIngredients();
       else if (currentPage === 'data') refreshDataSummary();
     }
 
+    // ===== SKIPPED DAYS =====
+    function getSkippedDays() {
+      return DB.get('skippedDays') || [];
+    }
+
+    function toDateStr(date) {
+      const d = typeof date === 'string' ? new Date(date) : date;
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+
+    function isDaySkipped(dateStr) {
+      return getSkippedDays().includes(dateStr);
+    }
+
+    function toggleSkipDay(dateStr) {
+      let skipped = getSkippedDays();
+      if (skipped.includes(dateStr)) {
+        skipped = skipped.filter(d => d !== dateStr);
+      } else {
+        skipped.push(dateStr);
+      }
+      DB.set('skippedDays', skipped);
+      refreshHome();
+    }
+
     // ===== HOME PAGE =====
     function refreshHome() {
       const meals = DB.get('meals') || [];
-      const measurements = DB.get('measurements') || [];
       const today = new Date().toDateString();
-      
+      const todayStr = toDateStr(new Date());
+      const skipped = isDaySkipped(todayStr);
+
+      // Render skip-day area
+      const skipArea = document.getElementById('skip-day-area');
+      if (skipped) {
+        skipArea.innerHTML = `
+          <div class="skipped-today-notice">
+            ☁️ Today is marked as unknown
+          </div>
+          <div class="skip-day-banner">
+            <div class="skip-info">
+              <div class="skip-label">Day off tracking</div>
+              <div class="skip-sublabel">Tap to resume tracking today</div>
+            </div>
+            <div class="toggle-track active" onclick="toggleSkipDay('${todayStr}')">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+        `;
+      } else {
+        skipArea.innerHTML = `
+          <div class="skip-day-banner">
+            <div class="skip-info">
+              <div class="skip-label">Mark today as unknown</div>
+              <div class="skip-sublabel">Vacation, eating out, no idea on calories…</div>
+            </div>
+            <div class="toggle-track" onclick="toggleSkipDay('${todayStr}')">
+              <div class="toggle-thumb"></div>
+            </div>
+          </div>
+        `;
+      }
+
       // Today's totals
       const todayMeals = meals.filter(m => new Date(m.date).toDateString() === today);
       let totalCal = 0, totalProtein = 0;
@@ -759,25 +908,19 @@
         totalProtein += m.totalProtein || 0;
       });
       
+      const statsEl = document.querySelector('.stats');
+      const mealsCardEl = document.getElementById('today-meals-card');
+
+      if (skipped) {
+        statsEl.style.opacity = '0.35';
+        mealsCardEl.style.opacity = '0.35';
+      } else {
+        statsEl.style.opacity = '1';
+        mealsCardEl.style.opacity = '1';
+      }
+
       document.getElementById('today-calories').textContent = Math.round(totalCal);
       document.getElementById('today-protein').textContent = Math.round(totalProtein) + 'g';
-      
-      // Latest measurement
-      const latestMeasurement = measurements[measurements.length - 1];
-      const measEl = document.getElementById('latest-measurement');
-      if (latestMeasurement) {
-        const date = new Date(latestMeasurement.date).toLocaleDateString();
-        measEl.innerHTML = `
-          <div class="list-item">
-            <div>
-              <div class="list-item-title">Above: ${latestMeasurement.above} cm / Below: ${latestMeasurement.below} cm</div>
-              <div class="list-item-subtitle">${date}${latestMeasurement.notes ? ' • ' + latestMeasurement.notes : ''}</div>
-            </div>
-          </div>
-        `;
-      } else {
-        measEl.innerHTML = '<p class="empty">No measurements yet</p>';
-      }
       
       // Today's meals
       const mealsEl = document.getElementById('today-meals');
@@ -798,7 +941,9 @@
           `;
         }).join('');
       } else {
-        mealsEl.innerHTML = '<p class="empty">No meals logged today</p>';
+        mealsEl.innerHTML = skipped
+          ? '<p class="empty">Day marked as unknown</p>'
+          : '<p class="empty">No meals logged today</p>';
       }
     }
 
@@ -814,6 +959,7 @@
 
     function refreshTrends() {
       const meals = DB.get('meals') || [];
+      const skippedDays = getSkippedDays();
       
       // Get date range using local dates
       const endDate = new Date();
@@ -823,20 +969,13 @@
       // Create daily data using local date strings
       const dailyData = {};
       for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`;
-        dailyData[dateStr] = { cal: 0, protein: 0, carbs: 0, fat: 0 };
+        const dateStr = toDateStr(d);
+        dailyData[dateStr] = { cal: 0, protein: 0, carbs: 0, fat: 0, skipped: skippedDays.includes(dateStr) };
       }
       
       // Aggregate meals by day using local dates
       meals.forEach(m => {
-        const mealDate = new Date(m.date);
-        const year = mealDate.getFullYear();
-        const month = String(mealDate.getMonth() + 1).padStart(2, '0');
-        const day = String(mealDate.getDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`;
+        const dateStr = toDateStr(new Date(m.date));
         
         if (dailyData[dateStr]) {
           dailyData[dateStr].cal += m.totalCal || 0;
@@ -852,19 +991,26 @@
       renderSimpleChart('carbs-chart', dailyData, 'carbs', 'g');
       renderSimpleChart('fat-chart', dailyData, 'fat', 'g');
       
-      // Calculate summary
+      // Calculate summary — exclude skipped days
       const values = Object.values(dailyData);
-      const daysWithData = values.filter(d => d.cal > 0).length;
-      const avgCal = daysWithData > 0 ? values.reduce((sum, d) => sum + d.cal, 0) / daysWithData : 0;
-      const avgProtein = daysWithData > 0 ? values.reduce((sum, d) => sum + d.protein, 0) / daysWithData : 0;
-      const avgCarbs = daysWithData > 0 ? values.reduce((sum, d) => sum + d.carbs, 0) / daysWithData : 0;
-      const avgFat = daysWithData > 0 ? values.reduce((sum, d) => sum + d.fat, 0) / daysWithData : 0;
+      const trackedDays = values.filter(d => !d.skipped);
+      const skippedCount = values.filter(d => d.skipped).length;
+      const daysWithData = trackedDays.filter(d => d.cal > 0).length;
+      const avgCal = daysWithData > 0 ? trackedDays.reduce((sum, d) => sum + d.cal, 0) / daysWithData : 0;
+      const avgProtein = daysWithData > 0 ? trackedDays.reduce((sum, d) => sum + d.protein, 0) / daysWithData : 0;
+      const avgCarbs = daysWithData > 0 ? trackedDays.reduce((sum, d) => sum + d.carbs, 0) / daysWithData : 0;
+      const avgFat = daysWithData > 0 ? trackedDays.reduce((sum, d) => sum + d.fat, 0) / daysWithData : 0;
       
       document.getElementById('trend-summary').innerHTML = `
         <div class="list-item">
           <span>Days Tracked</span>
           <strong>${daysWithData} / ${trendPeriod}</strong>
         </div>
+        ${skippedCount > 0 ? `
+        <div class="list-item">
+          <span>Unknown Days</span>
+          <strong style="color: #b8860b;">${skippedCount}</strong>
+        </div>` : ''}
         <div class="list-item">
           <span>Avg Daily Calories</span>
           <strong>${Math.round(avgCal)}</strong>
@@ -888,7 +1034,9 @@
       const el = document.getElementById(elementId);
       const dates = Object.keys(dailyData).sort();
       const values = dates.map(d => dailyData[d][key]);
-      const maxValue = Math.max(...values);
+      const skippedFlags = dates.map(d => dailyData[d].skipped);
+      const trackedValues = values.filter((v, i) => !skippedFlags[i]);
+      const maxValue = trackedValues.length > 0 ? Math.max(...trackedValues) : 0;
       
       // Update max value display
       const maxElementId = elementId.replace('-chart', '-max');
@@ -897,18 +1045,33 @@
         maxEl.textContent = maxValue > 0 ? `(max: ${Math.round(maxValue)})` : '';
       }
       
-      // Check if there's any data
-      if (maxValue === 0) {
+      // Check if there's any data at all (including skipped)
+      const hasAnyTracked = trackedValues.some(v => v > 0);
+      const hasAnySkipped = skippedFlags.some(s => s);
+      if (!hasAnyTracked && !hasAnySkipped) {
         el.innerHTML = '<div style="text-align: center; padding: 60px 20px; color: var(--text-light);">No data for this period</div>';
         return;
       }
       
       el.innerHTML = dates.map((date, i) => {
         const value = values[i];
-        const height = maxValue > 0 ? (value / maxValue) * 100 : 0;
-        const heightPx = maxValue > 0 ? Math.max((value / maxValue) * 180, value > 0 ? 3 : 0) : 0;
-        const dateObj = new Date(date);
+        const isSkipped = skippedFlags[i];
+        const dateObj = new Date(date + 'T12:00:00');
         const dayLabel = dateObj.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+        
+        if (isSkipped) {
+          return `
+            <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+              <div style="width: 100%; height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
+                <div style="font-size: 16px; margin-bottom: 4px; color: #b8860b;" title="Unknown day">?</div>
+                <div class="chart-bar-skipped" style="width: 80%; height: 40px;" title="Unknown day"></div>
+              </div>
+              <div class="chart-label" style="color: #b8860b;">${dayLabel}</div>
+            </div>
+          `;
+        }
+        
+        const heightPx = maxValue > 0 ? Math.max((value / maxValue) * 180, value > 0 ? 3 : 0) : 0;
         
         return `
           <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
@@ -920,67 +1083,6 @@
           </div>
         `;
       }).join('');
-    }
-
-    // ===== MEASUREMENTS =====
-    function saveMeasurement() {
-      const above = parseFloat(document.getElementById('above-navel').value);
-      const below = parseFloat(document.getElementById('below-navel').value);
-      const notes = document.getElementById('measure-notes').value.trim();
-      
-      if (!above || !below) {
-        alert('Please enter both measurements');
-        return;
-      }
-      
-      const measurements = DB.get('measurements') || [];
-      measurements.push({
-        id: Date.now(),
-        date: new Date().toISOString(),
-        above,
-        below,
-        notes
-      });
-      DB.set('measurements', measurements);
-      
-      document.getElementById('above-navel').value = '';
-      document.getElementById('below-navel').value = '';
-      document.getElementById('measure-notes').value = '';
-      
-      refreshMeasurements();
-      alert('Measurement saved!');
-    }
-
-    function refreshMeasurements() {
-      const measurements = DB.get('measurements') || [];
-      const el = document.getElementById('measurement-history');
-      
-      if (measurements.length === 0) {
-        el.innerHTML = '<p class="empty">No measurements yet</p>';
-        return;
-      }
-      
-      const sorted = [...measurements].reverse().slice(0, 10);
-      el.innerHTML = sorted.map(m => {
-        const date = new Date(m.date).toLocaleDateString();
-        return `
-          <div class="list-item">
-            <div>
-              <div class="list-item-title">↑ ${m.above} cm / ↓ ${m.below} cm</div>
-              <div class="list-item-subtitle">${date}${m.notes ? ' • ' + m.notes : ''}</div>
-            </div>
-            <button class="delete-btn" onclick="deleteMeasurement(${m.id})">✕</button>
-          </div>
-        `;
-      }).join('');
-    }
-
-    function deleteMeasurement(id) {
-      if (!confirm('Delete this measurement?')) return;
-      let measurements = DB.get('measurements') || [];
-      measurements = measurements.filter(m => m.id !== id);
-      DB.set('measurements', measurements);
-      refreshMeasurements();
     }
 
     // ===== FOOD LOGGING =====
@@ -1521,8 +1623,8 @@
     // ===== DATA EXPORT/IMPORT =====
     function refreshDataSummary() {
       const meals = DB.get('meals') || [];
-      const measurements = DB.get('measurements') || [];
       const ingredients = DB.get('ingredients') || [];
+      const skippedDays = getSkippedDays();
       
       document.getElementById('data-summary').innerHTML = `
         <div class="list-item">
@@ -1530,12 +1632,12 @@
           <strong>${meals.length}</strong>
         </div>
         <div class="list-item">
-          <span>Total Measurements</span>
-          <strong>${measurements.length}</strong>
-        </div>
-        <div class="list-item">
           <span>Ingredients in Repository</span>
           <strong>${ingredients.length}</strong>
+        </div>
+        <div class="list-item">
+          <span>Unknown Days</span>
+          <strong style="${skippedDays.length > 0 ? 'color: #b8860b;' : ''}">${skippedDays.length}</strong>
         </div>
       `;
     }
@@ -1545,8 +1647,8 @@
         version: 1,
         exportDate: new Date().toISOString(),
         meals: DB.get('meals') || [],
-        measurements: DB.get('measurements') || [],
-        ingredients: DB.get('ingredients') || []
+        ingredients: DB.get('ingredients') || [],
+        skippedDays: DB.get('skippedDays') || []
       };
       
       let content, filename, type;
@@ -1573,16 +1675,6 @@
         content = [headers.join(','), ...rows].join('\n');
         filename = 'vitatrack_meals.csv';
         type = 'text/csv';
-      } else if (format === 'measurements') {
-        const measurements = data.measurements;
-        const headers = ['Date', 'Above Navel (cm)', 'Below Navel (cm)', 'Notes'];
-        const rows = measurements.map(m => {
-          const d = new Date(m.date);
-          return [d.toLocaleDateString(), m.above, m.below, '"' + (m.notes || '') + '"'].join(',');
-        });
-        content = [headers.join(','), ...rows].join('\n');
-        filename = 'vitatrack_measurements.csv';
-        type = 'text/csv';
       }
       
       const blob = new Blob([content], { type });
@@ -1602,11 +1694,11 @@
       reader.onload = function(e) {
         try {
           const data = JSON.parse(e.target.result);
-          if (data.version && data.meals && data.measurements && data.ingredients) {
+          if (data.version && data.meals && data.ingredients) {
             if (confirm('This will replace all your current data. Continue?')) {
               DB.set('meals', data.meals);
-              DB.set('measurements', data.measurements);
               DB.set('ingredients', data.ingredients);
+              if (data.skippedDays) DB.set('skippedDays', data.skippedDays);
               refreshPage();
               alert('Data imported successfully!');
             }

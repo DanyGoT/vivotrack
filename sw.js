@@ -1,5 +1,5 @@
-const CACHE_NAME = 'vitatrack-v1';
-const urlsToCache = [
+const CACHE_NAME = 'vitatrack-v2';
+const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
@@ -7,43 +7,64 @@ const urlsToCache = [
   './icons/icon-512.png'
 ];
 
-// Install event - cache files
+// Install: precache all static assets
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(STATIC_ASSETS);
+    })
   );
   self.skipWaiting();
 });
 
-// Fetch event - serve from cache, fall back to network
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      })
-  );
-});
-
-// Activate event - clean up old caches
+// Activate: clean up old caches
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
+        cacheNames
+          .filter(name => name !== CACHE_NAME)
+          .map(name => caches.delete(name))
       );
     })
   );
   self.clients.claim();
+});
+
+// Fetch: network-first for navigation, cache-first for assets
+self.addEventListener('fetch', event => {
+  const { request } = event;
+
+  // For navigation requests (HTML pages), try network first
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          // Update cache with fresh version
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          return response;
+        })
+        .catch(() => caches.match(request).then(r => r || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // For all other requests, cache-first
+  event.respondWith(
+    caches.match(request).then(cached => {
+      if (cached) return cached;
+      return fetch(request).then(response => {
+        // Cache successful responses
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+        }
+        return response;
+      }).catch(() => {
+        // Return offline fallback for failed requests if available
+        return new Response('Offline', { status: 503, statusText: 'Offline' });
+      });
+    })
+  );
 });
