@@ -524,6 +524,19 @@
 
     <!-- FOOD PAGE -->
     <div id="food" class="page">
+      <div class="card" style="padding: 12px 16px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="margin:0;white-space:nowrap;font-weight:500;font-size:14px;">Log for:</label>
+          <div class="period-selector" style="margin:0;flex:1;">
+            <button class="period-btn active" id="date-today-btn" onclick="setMealDate('today')">Today</button>
+            <button class="period-btn" id="date-yesterday-btn" onclick="setMealDate('yesterday')">Yesterday</button>
+            <button class="period-btn" id="date-other-btn" onclick="document.getElementById('meal-date-picker').showPicker()">Other…</button>
+          </div>
+          <input type="date" id="meal-date-picker" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;" onchange="setMealDate('custom')">
+        </div>
+        <div id="meal-date-display" style="display:none;text-align:center;margin-top:8px;font-size:13px;color:var(--primary);font-weight:500;"></div>
+      </div>
+
       <div class="card">
         <h2>Log Meal</h2>
         
@@ -542,6 +555,39 @@
         
         <button class="btn btn-primary" onclick="saveMeal()">Save Meal</button>
         <button class="btn btn-secondary" onclick="openNewIngredientModal()">+ New Ingredient</button>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleQuickAdd()">
+          <h2 style="margin-bottom:0;">Quick Add Macros</h2>
+          <span id="quick-add-chevron" style="font-size:18px;color:var(--text-light);transition:transform 0.2s;">▸</span>
+        </div>
+        <div id="quick-add-body" style="display:none;margin-top:12px;">
+          <p style="font-size:13px;color:var(--text-light);margin-bottom:12px;">Log calories and macros directly — no ingredients needed.</p>
+          <label>Label (optional)</label>
+          <input type="text" id="quick-label" placeholder="e.g., Restaurant dinner, Snack…">
+          <div class="form-row">
+            <div>
+              <label>Calories *</label>
+              <input type="number" id="quick-cal" inputmode="decimal" placeholder="0">
+            </div>
+            <div>
+              <label>Protein (g)</label>
+              <input type="number" id="quick-protein" inputmode="decimal" placeholder="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label>Carbs (g)</label>
+              <input type="number" id="quick-carbs" inputmode="decimal" placeholder="0">
+            </div>
+            <div>
+              <label>Fat (g)</label>
+              <input type="number" id="quick-fat" inputmode="decimal" placeholder="0">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="saveQuickAdd()">Log Macros</button>
+        </div>
       </div>
       
       <div class="card">
@@ -927,11 +973,14 @@
       if (todayMeals.length > 0) {
         mealsEl.innerHTML = todayMeals.map(m => {
           const time = new Date(m.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+          const subtitle = m.quickAdd
+            ? `<span style="color:var(--primary);font-size:11px;font-weight:600;">QUICK</span> ${m.ingredients[0].name}`
+            : m.ingredients.map(i => i.name).join(', ');
           return `
             <div class="list-item">
               <div>
                 <div class="list-item-title">${time}</div>
-                <div class="list-item-subtitle">${m.ingredients.map(i => i.name).join(', ')}</div>
+                <div class="list-item-subtitle">${subtitle}</div>
               </div>
               <div class="list-item-value">
                 <div>${m.totalCal} cal</div>
@@ -1085,9 +1134,83 @@
       }).join('');
     }
 
+    // ===== MEAL DATE PICKER =====
+    let mealDateMode = 'today'; // 'today', 'yesterday', 'custom'
+
+    function setMealDate(mode) {
+      mealDateMode = mode;
+      const picker = document.getElementById('meal-date-picker');
+      const display = document.getElementById('meal-date-display');
+
+      document.getElementById('date-today-btn').classList.remove('active');
+      document.getElementById('date-yesterday-btn').classList.remove('active');
+      document.getElementById('date-other-btn').classList.remove('active');
+
+      if (mode === 'today') {
+        document.getElementById('date-today-btn').classList.add('active');
+        display.style.display = 'none';
+      } else if (mode === 'yesterday') {
+        document.getElementById('date-yesterday-btn').classList.add('active');
+        display.style.display = 'none';
+      } else if (mode === 'custom') {
+        document.getElementById('date-other-btn').classList.add('active');
+        const val = picker.value;
+        if (val) {
+          const parts = val.split('-');
+          const d = new Date(parts[0], parts[1] - 1, parts[2]);
+          display.textContent = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+          display.style.display = 'block';
+        }
+      }
+    }
+
+    function getMealDate() {
+      const now = new Date();
+      if (mealDateMode === 'today') {
+        return now;
+      } else if (mealDateMode === 'yesterday') {
+        const d = new Date(now);
+        d.setDate(d.getDate() - 1);
+        // Set to noon so it's clearly that day
+        d.setHours(12, 0, 0, 0);
+        return d;
+      } else {
+        const val = document.getElementById('meal-date-picker').value;
+        if (val) {
+          const parts = val.split('-');
+          const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+          return d;
+        }
+        return now;
+      }
+    }
+
     // ===== FOOD LOGGING =====
     let selectedIngredients = [];
     let pendingIngredient = null;
+    let newMealEditIndex = null; // track re-editing an ingredient in new meal
+
+    function editSelectedIngredient(idx) {
+      const ing = selectedIngredients[idx];
+      const ingredients = DB.get('ingredients') || [];
+      const baseIng = ingredients.find(i => i.id === ing.id);
+      
+      // For quick-add entries there's no base ingredient
+      if (!baseIng) {
+        alert('This entry can only be removed, not edited');
+        return;
+      }
+      
+      newMealEditIndex = idx;
+      pendingIngredient = baseIng;
+      
+      document.getElementById('qty-ingredient-name').textContent = ing.name;
+      document.getElementById('qty-amount').value = ing.amount;
+      document.getElementById('qty-unit').innerHTML = `<option value="${ing.unit}">${ing.unit}</option>`;
+      updateQuantityPreview();
+      
+      document.getElementById('quantity-modal').classList.add('active');
+    }
 
     function searchIngredients() {
       const query = document.getElementById('ingredient-search').value.toLowerCase().trim();
@@ -1149,6 +1272,7 @@
       document.getElementById('quantity-modal').classList.remove('active');
       pendingIngredient = null;
       editingMealIngredientIndex = null;
+      newMealEditIndex = null;
     }
 
     function confirmAddIngredient() {
@@ -1167,12 +1291,18 @@
         fat: Math.round((pendingIngredient.fat || 0) * ratio)
       };
       
-      // Check if we're editing an existing meal ingredient
+      // Check if we're editing an existing meal ingredient (edit modal)
       if (editingMealIngredientIndex !== null) {
         editingMealIngredients[editingMealIngredientIndex] = ingredientData;
         editingMealIngredientIndex = null;
         closeQuantityModal();
         updateEditMealDisplay();
+      } else if (newMealEditIndex !== null) {
+        // Re-editing an ingredient in the new meal
+        selectedIngredients[newMealEditIndex] = ingredientData;
+        newMealEditIndex = null;
+        closeQuantityModal();
+        updateSelectedIngredients();
       } else {
         // Adding to a new meal
         selectedIngredients.push(ingredientData);
@@ -1184,9 +1314,9 @@
     function updateSelectedIngredients() {
       const el = document.getElementById('selected-ingredients');
       el.innerHTML = selectedIngredients.map((ing, idx) => `
-        <div class="chip">
+        <div class="chip" onclick="editSelectedIngredient(${idx})" style="cursor: pointer;">
           ${ing.name} (${ing.amount}${ing.unit})
-          <button class="chip-remove" onclick="removeIngredient(${idx})">×</button>
+          <button class="chip-remove" onclick="event.stopPropagation(); removeIngredient(${idx})">×</button>
         </div>
       `).join('');
       
@@ -1232,7 +1362,7 @@
       const meals = DB.get('meals') || [];
       meals.push({
         id: Date.now(),
-        date: new Date().toISOString(),
+        date: getMealDate().toISOString(),
         ingredients: selectedIngredients,
         totalCal,
         totalProtein,
@@ -1246,7 +1376,62 @@
       refreshMeals();
       refreshHome();
       if (currentPage === 'trends') refreshTrends();
-      alert('Meal saved!');
+      const savedDate = getMealDate();
+      const isToday = savedDate.toDateString() === new Date().toDateString();
+      alert(isToday ? 'Meal saved!' : 'Meal saved for ' + savedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + '!');
+    }
+
+    // ===== QUICK ADD MACROS =====
+    function toggleQuickAdd() {
+      const body = document.getElementById('quick-add-body');
+      const chevron = document.getElementById('quick-add-chevron');
+      if (body.style.display === 'none') {
+        body.style.display = 'block';
+        chevron.style.transform = 'rotate(90deg)';
+      } else {
+        body.style.display = 'none';
+        chevron.style.transform = 'rotate(0deg)';
+      }
+    }
+
+    function saveQuickAdd() {
+      const cal = parseFloat(document.getElementById('quick-cal').value) || 0;
+      const protein = parseFloat(document.getElementById('quick-protein').value) || 0;
+      const carbs = parseFloat(document.getElementById('quick-carbs').value) || 0;
+      const fat = parseFloat(document.getElementById('quick-fat').value) || 0;
+      const label = document.getElementById('quick-label').value.trim() || 'Quick add';
+
+      if (cal === 0 && protein === 0 && carbs === 0 && fat === 0) {
+        alert('Please enter at least one value');
+        return;
+      }
+
+      const meals = DB.get('meals') || [];
+      meals.push({
+        id: Date.now(),
+        date: getMealDate().toISOString(),
+        quickAdd: true,
+        ingredients: [{ name: label, amount: 1, unit: 'entry', cal: Math.round(cal), protein: Math.round(protein), carbs: Math.round(carbs), fat: Math.round(fat) }],
+        totalCal: Math.round(cal),
+        totalProtein: Math.round(protein),
+        totalCarbs: Math.round(carbs),
+        totalFat: Math.round(fat)
+      });
+      DB.set('meals', meals);
+
+      // Clear form
+      document.getElementById('quick-label').value = '';
+      document.getElementById('quick-cal').value = '';
+      document.getElementById('quick-protein').value = '';
+      document.getElementById('quick-carbs').value = '';
+      document.getElementById('quick-fat').value = '';
+
+      refreshMeals();
+      refreshHome();
+      if (currentPage === 'trends') refreshTrends();
+      const savedDate = getMealDate();
+      const isToday = savedDate.toDateString() === new Date().toDateString();
+      alert(isToday ? 'Macros logged!' : 'Macros logged for ' + savedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + '!');
     }
 
     function refreshMeals() {
@@ -1262,11 +1447,14 @@
       el.innerHTML = sorted.map(m => {
         const date = new Date(m.date).toLocaleDateString();
         const time = new Date(m.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const subtitle = m.quickAdd
+          ? `<span style="color:var(--primary);font-size:11px;font-weight:600;">QUICK</span> ${m.ingredients[0].name}`
+          : m.ingredients.map(i => i.name).join(', ');
         return `
           <div class="list-item">
             <div>
               <div class="list-item-title">${date} at ${time}</div>
-              <div class="list-item-subtitle">${m.ingredients.map(i => i.name).join(', ')}</div>
+              <div class="list-item-subtitle">${subtitle}</div>
             </div>
             <div class="list-item-actions">
               <div class="list-item-value">
@@ -1714,6 +1902,8 @@
 
     // ===== INIT =====
     initData();
+    // Set date picker max to today
+    document.getElementById('meal-date-picker').max = toDateStr(new Date());
     refreshHome();
   </script>
 </body>
