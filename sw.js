@@ -1,4 +1,4 @@
-const CACHE_NAME = 'vitatrack-v4';
+const CACHE_NAME = 'vitatrack-v5';
 const STATIC_ASSETS = [
   './',
   './index.html',

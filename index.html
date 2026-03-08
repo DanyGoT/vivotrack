@@ -530,7 +530,7 @@
           <div class="period-selector" style="margin:0;flex:1;">
             <button class="period-btn active" id="date-today-btn" onclick="setMealDate('today')">Today</button>
             <button class="period-btn" id="date-yesterday-btn" onclick="setMealDate('yesterday')">Yesterday</button>
-            <button class="period-btn" id="date-other-btn" onclick="document.getElementById('meal-date-picker').showPicker()">Other…</button>
+            <button class="period-btn" id="date-other-btn" onclick="openMealDatePicker()">Other…</button>
           </div>
           <input type="date" id="meal-date-picker" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none;" onchange="setMealDate('custom')">
         </div>
@@ -717,6 +717,17 @@
         <h3>Edit Meal</h3>
         <button class="modal-close" onclick="closeMealModal()">&times;</button>
       </div>
+
+      <div class="form-row" style="margin-bottom:12px;">
+        <div>
+          <label>Date</label>
+          <input type="date" id="edit-meal-date">
+        </div>
+        <div>
+          <label>Time</label>
+          <input type="time" id="edit-meal-time">
+        </div>
+      </div>
       
       <div id="edit-meal-ingredients" class="chips"></div>
       
@@ -732,6 +743,7 @@
       </div>
       
       <button class="btn btn-primary" onclick="saveEditedMeal()">Save Changes</button>
+      <button class="btn btn-secondary" onclick="copyMealFromModal()">Copy to Today</button>
       <button class="btn btn-danger" onclick="deleteMealFromModal()">Delete Meal</button>
     </div>
   </div>
@@ -1137,6 +1149,14 @@
     // ===== MEAL DATE PICKER =====
     let mealDateMode = 'today'; // 'today', 'yesterday', 'custom'
 
+    function openMealDatePicker() {
+      const picker = document.getElementById('meal-date-picker');
+      // Make it temporarily interactable for browsers that need a click
+      picker.style.pointerEvents = 'auto';
+      try { picker.showPicker(); } catch(e) { picker.click(); }
+      setTimeout(() => { picker.style.pointerEvents = 'none'; }, 100);
+    }
+
     function setMealDate(mode) {
       mealDateMode = mode;
       const picker = document.getElementById('meal-date-picker');
@@ -1378,6 +1398,8 @@
       if (currentPage === 'trends') refreshTrends();
       const savedDate = getMealDate();
       const isToday = savedDate.toDateString() === new Date().toDateString();
+      // Reset date picker back to today
+      setMealDate('today');
       alert(isToday ? 'Meal saved!' : 'Meal saved for ' + savedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + '!');
     }
 
@@ -1431,6 +1453,8 @@
       if (currentPage === 'trends') refreshTrends();
       const savedDate = getMealDate();
       const isToday = savedDate.toDateString() === new Date().toDateString();
+      // Reset date picker back to today
+      setMealDate('today');
       alert(isToday ? 'Macros logged!' : 'Macros logged for ' + savedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + '!');
     }
 
@@ -1460,8 +1484,9 @@
               <div class="list-item-value">
                 <div>${m.totalCal} cal</div>
               </div>
-              <button class="edit-btn" onclick="editMeal(${m.id})">✎</button>
-              <button class="delete-btn" onclick="deleteMeal(${m.id})">✕</button>
+              <button class="edit-btn" onclick="copyMeal(${m.id})" title="Copy meal">⧉</button>
+              <button class="edit-btn" onclick="editMeal(${m.id})" title="Edit meal">✎</button>
+              <button class="delete-btn" onclick="deleteMeal(${m.id})" title="Delete meal">✕</button>
             </div>
           </div>
         `;
@@ -1478,6 +1503,37 @@
       if (currentPage === 'trends') refreshTrends();
     }
 
+    function copyMeal(id) {
+      const meals = DB.get('meals') || [];
+      const meal = meals.find(m => m.id === id);
+      if (!meal) return;
+
+      const now = new Date();
+      const copy = {
+        id: Date.now(),
+        date: now.toISOString(),
+        ingredients: JSON.parse(JSON.stringify(meal.ingredients)),
+        totalCal: meal.totalCal,
+        totalProtein: meal.totalProtein,
+        totalCarbs: meal.totalCarbs,
+        totalFat: meal.totalFat
+      };
+      if (meal.quickAdd) copy.quickAdd = true;
+
+      meals.push(copy);
+      DB.set('meals', meals);
+      refreshMeals();
+      refreshHome();
+      if (currentPage === 'trends') refreshTrends();
+      alert('Meal copied to today!');
+    }
+
+    function copyMealFromModal() {
+      if (!editingMealId) return;
+      closeMealModal();
+      copyMeal(editingMealId);
+    }
+
     // ===== EDIT MEAL =====
     let editingMealId = null;
     let editingMealIngredients = [];
@@ -1489,6 +1545,14 @@
       
       editingMealId = id;
       editingMealIngredients = [...meal.ingredients];
+
+      // Pre-fill date and time
+      const mealDate = new Date(meal.date);
+      const dateStr = toDateStr(mealDate);
+      const hours = String(mealDate.getHours()).padStart(2, '0');
+      const mins = String(mealDate.getMinutes()).padStart(2, '0');
+      document.getElementById('edit-meal-date').value = dateStr;
+      document.getElementById('edit-meal-time').value = `${hours}:${mins}`;
       
       updateEditMealDisplay();
       document.getElementById('meal-modal').classList.add('active');
@@ -1617,10 +1681,23 @@
         totalCarbs += i.carbs;
         totalFat += i.fat;
       });
+
+      // Build updated date from the fields
+      const dateVal = document.getElementById('edit-meal-date').value;
+      const timeVal = document.getElementById('edit-meal-time').value;
+      let newDate;
+      if (dateVal) {
+        const parts = dateVal.split('-');
+        const timeParts = timeVal ? timeVal.split(':') : ['12', '0'];
+        newDate = new Date(parts[0], parts[1] - 1, parts[2], timeParts[0], timeParts[1]);
+      } else {
+        newDate = new Date();
+      }
       
       let meals = DB.get('meals') || [];
       const mealIndex = meals.findIndex(m => m.id === editingMealId);
       if (mealIndex !== -1) {
+        meals[mealIndex].date = newDate.toISOString();
         meals[mealIndex].ingredients = editingMealIngredients;
         meals[mealIndex].totalCal = totalCal;
         meals[mealIndex].totalProtein = totalProtein;
